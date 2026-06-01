@@ -408,7 +408,29 @@ function render() { renderTabs(); renderApp(); }
 function renderTabs() {
   const sc = document.getElementById('tab-scroll');
   sc.innerHTML = '';
-  portfolios.forEach(p => {
+  portfolios.forEach((p, idx) => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;align-items:center;gap:2px;flex-shrink:0';
+
+    // 순서 이동 버튼 (활성 탭에만 표시)
+    if (p.id === activeId && portfolios.length > 1) {
+      const btnL = document.createElement('button');
+      btnL.textContent = '←';
+      btnL.title = '왼쪽으로';
+      btnL.disabled = idx === 0;
+      btnL.style.cssText = `width:22px;height:32px;border-radius:6px;border:1px solid #ddd;background:#f7f7f5;color:${idx===0?'#ccc':'#666'};font-size:12px;cursor:${idx===0?'default':'pointer'};padding:0`;
+      btnL.onclick = (e) => { e.stopPropagation(); reorderTab(idx, -1); };
+
+      const btnR = document.createElement('button');
+      btnR.textContent = '→';
+      btnR.title = '오른쪽으로';
+      btnR.disabled = idx === portfolios.length - 1;
+      btnR.style.cssText = `width:22px;height:32px;border-radius:6px;border:1px solid #ddd;background:#f7f7f5;color:${idx===portfolios.length-1?'#ccc':'#666'};font-size:12px;cursor:${idx===portfolios.length-1?'default':'pointer'};padding:0`;
+      btnR.onclick = (e) => { e.stopPropagation(); reorderTab(idx, 1); };
+
+      wrap.appendChild(btnL);
+    }
+
     const b = document.createElement('button');
     b.className = 'tab-btn' + (p.id===activeId?' active':'');
     b.innerHTML = `<span>${p.name}</span><span style="opacity:.6;font-size:11px;margin-left:3px">${p.sub}</span>`;
@@ -417,13 +439,36 @@ function renderTabs() {
       activeId = p.id; confirmingDelete = false; lastItems = null; lastGrand = 0;
       render();
     };
-    sc.appendChild(b);
+    wrap.appendChild(b);
+
+    if (p.id === activeId && portfolios.length > 1) {
+      const btnR = document.createElement('button');
+      btnR.textContent = '→';
+      btnR.title = '오른쪽으로';
+      btnR.disabled = idx === portfolios.length - 1;
+      btnR.style.cssText = `width:22px;height:32px;border-radius:6px;border:1px solid #ddd;background:#f7f7f5;color:${idx===portfolios.length-1?'#ccc':'#666'};font-size:12px;cursor:${idx===portfolios.length-1?'default':'pointer'};padding:0`;
+      btnR.onclick = (e) => { e.stopPropagation(); reorderTab(idx, 1); };
+      wrap.appendChild(btnR);
+    }
+
+    sc.appendChild(wrap);
   });
+
   const add = document.createElement('button');
   add.className = 'tab-add'; add.title = '포트폴리오 추가';
   add.textContent = '+';
   add.onclick = () => { flushGrand(); saveState(); openModal(); };
   sc.appendChild(add);
+}
+
+function reorderTab(idx, dir) {
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= portfolios.length) return;
+  const tmp = portfolios[idx];
+  portfolios[idx] = portfolios[newIdx];
+  portfolios[newIdx] = tmp;
+  saveState();
+  renderTabs();
 }
 
 function tabScroll(dir) {
