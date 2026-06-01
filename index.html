@@ -136,15 +136,16 @@ input[type=range]:active{cursor:grabbing}
   <button class="tab-arrow" id="tab-right" onclick="tabScroll(1)">&#8250;</button>
 </div>
   <div id="app"></div>
+  <!-- 포트폴리오 추가 모달 -->
   <div class="modal-bg" id="modal-bg" style="display:none">
-    <div class="modal">
-      <h3>새 포트폴리오 추가</h3>
-      <input id="m-name" placeholder="포트폴리오명 (예: 마돈나)">
-      <input id="m-sub"  placeholder="계좌/용도 (예: DC연금)">
-      <div class="modal-btns">
-        <button onclick="closeModal()">취소</button>
-        <button class="confirm" onclick="confirmAdd()">추가</button>
-      </div>
+    <div class="modal" style="max-height:90vh;overflow-y:auto">
+      <div id="modal-content"></div>
+    </div>
+  </div>
+  <!-- 템플릿 관리 모달 -->
+  <div class="modal-bg" id="tmpl-modal-bg" style="display:none">
+    <div class="modal" style="max-height:90vh;overflow-y:auto">
+      <div id="tmpl-modal-content"></div>
     </div>
   </div>
 </div>
@@ -204,6 +205,7 @@ const DEFAULT_PORTFOLIOS = () => [
 
 function init() {
   lastItems = null; lastGrand = 0; confirmingDelete = false;
+  loadTemplates();
   try {
     const saved = LS(SK);
     if (saved) {
@@ -486,6 +488,7 @@ function renderApp() {
         <input class="p-sub"   id="psub"   value="${p.sub}"  placeholder="계좌/용도"    oninput="updateMeta()">
       </div>
       <div class="top-actions">
+        <button class="icon-btn" id="price-fetch-btn" onclick="fetchPrices()">↓ 종가 로드</button>
         ${portfolios.length>1?`<button class="icon-btn" style="color:#D85A30;border-color:rgba(216,90,48,.3)" onclick="askDelete()">✕ 삭제</button>`:''}
       </div>
     </div>
@@ -496,6 +499,8 @@ function renderApp() {
       <button class="del-yes" onclick="doDelete()">삭제</button>
       <button class="del-no"  onclick="cancelDelete()">취소</button>
     </div>` : ''}
+
+    <div id="price-status-bar" style="display:none;align-items:center;gap:6px;padding:8px 12px;border-radius:8px;margin-bottom:10px;font-size:12px"></div>
 
     <div class="card">
       <div class="card-label">총 평가액 (추가금 포함)</div>
@@ -596,22 +601,268 @@ function renderHistDOM() {
   });
 }
 
-// ─── 포트폴리오 관리 ─────────────────────────────────────
+// ─── 포트폴리오 템플릿 관리 ──────────────────────────────
+const TK = 'rb_templates';
+
+const BUILTIN_TEMPLATES = [
+  {
+    id: 't1', name:'올웨더형',
+    etfs: [
+      {name:'TIGER 단기채권액티브', code:'272580', target:25,   maxQty:200},
+      {name:'TIGER 미국채10년 선물',code:'305080', target:25,   maxQty:500},
+      {name:'TIGER 미국S&P500',     code:'360750', target:12.5, maxQty:200},
+      {name:'RISE 200TR',           code:'361580', target:12.5, maxQty:200},
+      {name:'ACE KRX 금현물',       code:'411060', target:25,   maxQty:300},
+    ]
+  },
+  {
+    id: 't2', name:'마돈나형',
+    etfs: [
+      {name:'KIWOOM 국고채10년',       code:'148070', target:10, maxQty:100},
+      {name:'PLUS 신흥국 MSCI(합성H)', code:'195980', target:18, maxQty:800},
+      {name:'TIGER 단기채권액티브',    code:'272580', target:10, maxQty:200},
+      {name:'KODEX 200미국채혼합',     code:'284430', target:17, maxQty:600},
+      {name:'TIGER 미국S&P500',        code:'360750', target:25, maxQty:600},
+      {name:'ACE KRX 금현물',          code:'411060', target:20, maxQty:400},
+    ]
+  }
+];
+
+let templates = [];
+let tmplNextId = 1;
+
+function loadTemplates() {
+  try {
+    const s = LS(TK);
+    if (s) { const d = JSON.parse(s); templates = d.templates; tmplNextId = d.nextId; return; }
+  } catch(e) {}
+  templates = clone(BUILTIN_TEMPLATES);
+  tmplNextId = 100;
+}
+function saveTemplates() {
+  LSS(TK, JSON.stringify({templates, nextId: tmplNextId}));
+}
+
+// ─── 포트폴리오 추가 모달 ────────────────────────────────
 function openModal() {
-  document.getElementById('m-name').value = '';
-  document.getElementById('m-sub').value  = '';
+  renderAddModal('select');
   document.getElementById('modal-bg').style.display = 'flex';
 }
-function closeModal() { document.getElementById('modal-bg').style.display = 'none'; }
-function confirmAdd() {
-  const name = (document.getElementById('m-name').value||'').trim() || '새 포트폴리오';
-  const sub  = (document.getElementById('m-sub').value ||'').trim() || '';
-  const p = {id:nextId, name, sub, grand:0, etfs:clone(DEFAULT_ETFS)};
+function closeModal() {
+  document.getElementById('modal-bg').style.display = 'none';
+}
+
+function renderAddModal(step, data={}) {
+  const c = document.getElementById('modal-content');
+
+  if (step === 'select') {
+    // Step 1: 템플릿 선택
+    const tmplCards = templates.map(t => `
+      <div onclick="renderAddModal('name', {tmplId:'${t.id}'})"
+        style="padding:12px;border:1px solid #ddd;border-radius:10px;margin-bottom:8px;cursor:pointer;background:#f7f7f5">
+        <div style="font-size:14px;font-weight:500;margin-bottom:4px">${t.name}</div>
+        <div style="font-size:11px;color:#aaa">${t.etfs.map(e=>e.name).join(' · ')}</div>
+        <div style="font-size:11px;color:#aaa;margin-top:2px">${t.etfs.map(e=>e.target+'%').join(' / ')}</div>
+      </div>
+    `).join('');
+
+    c.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <h3 style="font-size:15px;font-weight:500">포트폴리오 추가</h3>
+        <button onclick="closeModal()" style="border:none;background:none;font-size:18px;color:#aaa;cursor:pointer">✕</button>
+      </div>
+      <div style="font-size:11px;color:#aaa;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">템플릿 선택</div>
+      ${tmplCards}
+      <div onclick="renderAddModal('name', {tmplId:'custom'})"
+        style="padding:12px;border:1px dashed #ccc;border-radius:10px;margin-bottom:8px;cursor:pointer;text-align:center;color:#aaa;font-size:13px">
+        ＋ 빈 포트폴리오 (직접 구성)
+      </div>
+      <div style="border-top:1px solid #eee;padding-top:10px;margin-top:4px;text-align:center">
+        <button onclick="openTmplManager()"
+          style="border:none;background:none;color:#aaa;font-size:12px;cursor:pointer;text-decoration:underline">
+          템플릿 관리 (추가 · 수정 · 삭제)
+        </button>
+      </div>
+    `;
+  }
+
+  else if (step === 'name') {
+    const tmpl = templates.find(t => t.id === data.tmplId);
+    const previewHtml = tmpl ? `
+      <div style="background:#f7f7f5;border-radius:8px;padding:10px;margin-bottom:14px;font-size:12px;color:#666">
+        <div style="font-weight:500;margin-bottom:4px">${tmpl.name}</div>
+        ${tmpl.etfs.map(e=>`<div>${e.name} <span style="color:#aaa">${e.target}%</span></div>`).join('')}
+      </div>` : `<div style="background:#f7f7f5;border-radius:8px;padding:10px;margin-bottom:14px;font-size:12px;color:#aaa">빈 포트폴리오 — 나중에 ETF 추가</div>`;
+
+    c.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+        <button onclick="renderAddModal('select')" style="border:none;background:none;font-size:18px;color:#aaa;cursor:pointer">←</button>
+        <h3 style="font-size:15px;font-weight:500">이름 입력</h3>
+        <button onclick="closeModal()" style="border:none;background:none;font-size:18px;color:#aaa;cursor:pointer;margin-left:auto">✕</button>
+      </div>
+      ${previewHtml}
+      <div style="margin-bottom:10px">
+        <div style="font-size:11px;color:#aaa;margin-bottom:4px">포트폴리오명</div>
+        <input id="m-name" placeholder="예: 올웨더" style="width:100%;padding:9px 10px;border:1px solid #ddd;border-radius:8px;background:#f7f7f5;font-size:13px;outline:none">
+      </div>
+      <div style="margin-bottom:16px">
+        <div style="font-size:11px;color:#aaa;margin-bottom:4px">계좌/용도</div>
+        <input id="m-sub" placeholder="예: 연금저축" style="width:100%;padding:9px 10px;border:1px solid #ddd;border-radius:8px;background:#f7f7f5;font-size:13px;outline:none">
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="closeModal()" style="flex:1;padding:10px;border-radius:8px;border:1px solid #ddd;background:#f7f7f5;color:#666;font-size:13px;cursor:pointer">취소</button>
+        <button onclick="confirmAdd('${data.tmplId}')" style="flex:1;padding:10px;border-radius:8px;border:none;background:#1a1a1a;color:#fff;font-size:13px;font-weight:500;cursor:pointer">추가</button>
+      </div>
+    `;
+    setTimeout(() => document.getElementById('m-name')?.focus(), 50);
+  }
+}
+
+function confirmAdd(tmplId) {
+  const name = (document.getElementById('m-name')?.value||'').trim() || '새 포트폴리오';
+  const sub  = (document.getElementById('m-sub')?.value ||'').trim() || '';
+  const tmpl = templates.find(t => t.id === tmplId);
+  const newEtfs = tmpl
+    ? tmpl.etfs.map(e => ({...e, price:0, qty:0}))
+    : clone(DEFAULT_ETFS).map(e => ({...e, price:0, qty:0}));
+  const p = {id:nextId, name, sub, grand:0, etfs:newEtfs};
   portfolios.push(p);
   histCache[nextId] = [];
   activeId = nextId++;
   lastItems = null; lastGrand = 0;
   closeModal(); saveState(); render();
+}
+
+// ─── 템플릿 관리 ─────────────────────────────────────────
+function openTmplManager() {
+  closeModal();
+  renderTmplManager('list');
+  document.getElementById('tmpl-modal-bg').style.display = 'flex';
+}
+function closeTmplManager() {
+  document.getElementById('tmpl-modal-bg').style.display = 'none';
+}
+
+function renderTmplManager(step, data={}) {
+  const c = document.getElementById('tmpl-modal-content');
+
+  if (step === 'list') {
+    const rows = templates.map((t,i) => `
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid #f0f0ee">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:500">${t.name}</div>
+          <div style="font-size:11px;color:#aaa;margin-top:1px">${t.etfs.length}개 종목</div>
+        </div>
+        <button onclick="renderTmplManager('edit',{idx:${i}})"
+          style="padding:4px 10px;border-radius:7px;border:1px solid #ddd;background:#fff;color:#666;font-size:12px;cursor:pointer">수정</button>
+        <button onclick="deleteTmpl(${i})"
+          style="padding:4px 8px;border-radius:7px;border:1px solid rgba(216,90,48,.3);background:none;color:#D85A30;font-size:12px;cursor:pointer">삭제</button>
+      </div>
+    `).join('');
+
+    c.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <h3 style="font-size:15px;font-weight:500">템플릿 관리</h3>
+        <button onclick="closeTmplManager()" style="border:none;background:none;font-size:18px;color:#aaa;cursor:pointer">✕</button>
+      </div>
+      ${rows}
+      <button onclick="renderTmplManager('edit',{idx:-1})"
+        style="width:100%;margin-top:12px;padding:10px;border:1px dashed #ccc;border-radius:8px;background:none;color:#aaa;font-size:13px;cursor:pointer">
+        ＋ 새 템플릿 추가
+      </button>
+    `;
+  }
+
+  else if (step === 'edit') {
+    const isNew = data.idx === -1;
+    const tmpl  = isNew ? {name:'', etfs:[]} : clone(templates[data.idx]);
+    const etfRows = tmpl.etfs.map((e, ei) => `
+      <div id="tmpl-etf-${ei}" style="display:grid;grid-template-columns:2fr 1fr 0.7fr auto;gap:6px;align-items:center;margin-bottom:6px">
+        <input value="${e.name}" placeholder="종목명" oninput="tmplEtfUpdate(${ei},'name',this.value)"
+          style="padding:6px 8px;border:1px solid #ddd;border-radius:7px;font-size:12px;outline:none;background:#f7f7f5">
+        <input value="${e.code}" placeholder="코드" oninput="tmplEtfUpdate(${ei},'code',this.value)"
+          style="padding:6px 8px;border:1px solid #ddd;border-radius:7px;font-size:12px;outline:none;background:#f7f7f5;text-align:center">
+        <input value="${e.target}" type="number" placeholder="비중%" oninput="tmplEtfUpdate(${ei},'target',parseFloat(this.value)||0)"
+          style="padding:6px 8px;border:1px solid #ddd;border-radius:7px;font-size:12px;outline:none;background:#f7f7f5;text-align:center">
+        <button onclick="tmplEtfRemove(${ei})" style="padding:4px 7px;border:1px solid rgba(216,90,48,.3);border-radius:7px;background:none;color:#D85A30;font-size:12px;cursor:pointer">✕</button>
+      </div>
+    `).join('');
+
+    // 편집 중인 템플릿을 임시 저장
+    window._editingTmpl = tmpl;
+    window._editingTmplIdx = data.idx;
+
+    c.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+        <button onclick="renderTmplManager('list')" style="border:none;background:none;font-size:18px;color:#aaa;cursor:pointer">←</button>
+        <h3 style="font-size:15px;font-weight:500">${isNew?'새 템플릿':'템플릿 수정'}</h3>
+        <button onclick="closeTmplManager()" style="border:none;background:none;font-size:18px;color:#aaa;cursor:pointer;margin-left:auto">✕</button>
+      </div>
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;color:#aaa;margin-bottom:4px">템플릿 이름</div>
+        <input id="tmpl-name-input" value="${tmpl.name}" placeholder="예: 올웨더형"
+          style="width:100%;padding:9px 10px;border:1px solid #ddd;border-radius:8px;background:#f7f7f5;font-size:13px;outline:none">
+      </div>
+      <div style="font-size:11px;color:#aaa;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
+        <span>ETF 구성</span>
+        <span style="color:#1D9E75">합계: <b id="tmpl-total-pct">${tmpl.etfs.reduce((s,e)=>s+e.target,0)}</b>%</span>
+      </div>
+      <div style="font-size:10px;color:#bbb;display:grid;grid-template-columns:2fr 1fr 0.7fr auto;gap:6px;margin-bottom:4px;padding:0 2px">
+        <span>종목명</span><span style="text-align:center">코드</span><span style="text-align:center">비중%</span><span></span>
+      </div>
+      <div id="tmpl-etf-list">${etfRows}</div>
+      <button onclick="tmplEtfAdd()"
+        style="width:100%;padding:8px;border:1px dashed #ccc;border-radius:7px;background:none;color:#aaa;font-size:12px;cursor:pointer;margin-top:4px;margin-bottom:14px">
+        ＋ 종목 추가
+      </button>
+      <div style="display:flex;gap:8px">
+        <button onclick="renderTmplManager('list')" style="flex:1;padding:10px;border-radius:8px;border:1px solid #ddd;background:#f7f7f5;color:#666;font-size:13px;cursor:pointer">취소</button>
+        <button onclick="saveTmpl()" style="flex:1;padding:10px;border-radius:8px;border:none;background:#1a1a1a;color:#fff;font-size:13px;font-weight:500;cursor:pointer">저장</button>
+      </div>
+    `;
+  }
+}
+
+function tmplEtfUpdate(ei, field, val) {
+  if (window._editingTmpl) {
+    window._editingTmpl.etfs[ei][field] = val;
+    const total = window._editingTmpl.etfs.reduce((s,e)=>s+(parseFloat(e.target)||0),0);
+    const el = document.getElementById('tmpl-total-pct');
+    if (el) { el.textContent = total.toFixed(1); el.style.color = Math.abs(total-100)<0.1?'#1D9E75':'#D85A30'; }
+  }
+}
+
+function tmplEtfAdd() {
+  if (!window._editingTmpl) return;
+  window._editingTmpl.etfs.push({name:'', code:'', target:0, maxQty:200});
+  renderTmplManager('edit', {idx: window._editingTmplIdx});
+}
+
+function tmplEtfRemove(ei) {
+  if (!window._editingTmpl) return;
+  window._editingTmpl.etfs.splice(ei, 1);
+  renderTmplManager('edit', {idx: window._editingTmplIdx});
+}
+
+function saveTmpl() {
+  const tmpl = window._editingTmpl;
+  if (!tmpl) return;
+  tmpl.name = document.getElementById('tmpl-name-input')?.value.trim() || '새 템플릿';
+  const isNew = window._editingTmplIdx === -1;
+  if (isNew) {
+    tmpl.id = 'u' + (tmplNextId++);
+    templates.push(tmpl);
+  } else {
+    templates[window._editingTmplIdx] = tmpl;
+  }
+  saveTemplates();
+  renderTmplManager('list');
+}
+
+function deleteTmpl(idx) {
+  templates.splice(idx, 1);
+  saveTemplates();
+  renderTmplManager('list');
 }
 function askDelete()    { confirmingDelete = true;  render(); }
 function cancelDelete() { confirmingDelete = false; render(); }
@@ -964,6 +1215,57 @@ function showCompleteToast() {
   `;
   document.body.appendChild(t);
   setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 600); }, 2500);
+}
+
+// ─── 종가 자동 로드 ──────────────────────────────────────
+async function fetchPrices() {
+  const btn = document.getElementById('price-fetch-btn');
+  const bar = document.getElementById('price-status-bar');
+  if (btn) { btn.textContent = '⏳ 로딩 중...'; btn.disabled = true; }
+  if (bar) { bar.style.display = 'flex'; bar.style.background = '#f7f7f5'; bar.style.color = '#aaa'; bar.textContent = '종가 데이터를 불러오는 중...'; }
+
+  try {
+    const res = await fetch(`prices.json?t=${Date.now()}`);
+    if (!res.ok) throw new Error('prices.json 없음');
+    const data = await res.json();
+    const prices = data.prices || {};
+
+    if (!data.date) throw new Error('아직 데이터 없음 (GitHub Actions 첫 실행 전)');
+
+    const p = getActive();
+    let updated = 0, skipped = 0;
+
+    p.etfs.forEach((e, i) => {
+      const price = prices[e.code];
+      if (price && price > 0) {
+        e.price = price;
+        const pf = document.getElementById('pf'+i);
+        if (pf) pf.textContent = fmt(price) + ' 원';
+        const pi = document.getElementById('p'+i);
+        if (pi) pi.value = price;
+        updated++;
+      } else {
+        skipped++;
+      }
+    });
+
+    saveState();
+    derive();
+
+    if (bar) {
+      bar.style.background = '#E1F5EE';
+      bar.style.color = '#085041';
+      bar.textContent = `✅ ${data.updated} 기준 종가 반영 (${updated}종목 업데이트${skipped?`, ${skipped}종목 미조회`:''})`; 
+    }
+  } catch(e) {
+    if (bar) {
+      bar.style.background = '#FAECE7';
+      bar.style.color = '#712B13';
+      bar.textContent = `⚠️ ${e.message} — 현재가를 직접 입력해 주세요`;
+    }
+  }
+
+  if (btn) { btn.textContent = '↓ 종가 로드'; btn.disabled = false; }
 }
 
 init();
