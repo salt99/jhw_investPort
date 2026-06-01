@@ -2,14 +2,16 @@ name: Fetch ETF Prices
 
 on:
   schedule:
-    - cron: '30 7 * * 1-5'  # 평일 오후 4시 30분 KST (UTC+9 = UTC 07:30)
-  workflow_dispatch:          # 수동 실행 버튼
+    - cron: '30 7 * * 1-5'  # 평일 오후 4시 30분 KST
+  workflow_dispatch:
 
 jobs:
   fetch:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout
@@ -18,7 +20,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Install dependencies
         run: pip install requests beautifulsoup4
