@@ -51,9 +51,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .qty-box{text-align:center;min-width:44px}
 .qty-display{font-size:15px;font-weight:500}
 .qty-unit{font-size:11px;color:#aaa}
-.slider-wrap{padding:2px 0}
-input[type=range]{width:100%;height:6px;accent-color:#1D9E75;cursor:grab}
-input[type=range]:active{cursor:grabbing}
+.slider-wrap{padding:4px 0}
+.custom-slider{width:100%;padding:10px 0;cursor:grab;user-select:none;-webkit-user-select:none;touch-action:none}
+.custom-slider:active{cursor:grabbing}
+.cs-track{position:relative;height:6px;background:#e8e8e6;border-radius:4px}
+.cs-fill{position:absolute;left:0;top:0;height:100%;background:#1D9E75;border-radius:4px;pointer-events:none}
+.cs-thumb{position:absolute;top:50%;width:24px;height:24px;background:#fff;border:2.5px solid #1D9E75;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 1px 5px rgba(0,0,0,.18);pointer-events:none}
 .slider-labels{display:flex;justify-content:space-between;font-size:10px;color:#bbb;margin-top:3px}
 .etf-add-row{display:flex;align-items:center;justify-content:center;padding:10px 0;cursor:pointer;color:#bbb;font-size:12px;gap:4px;border-top:1px dashed #eee;margin-top:4px}
 
@@ -925,21 +928,140 @@ function buildEtfs() {
         </div>
       </div>
       <div class="slider-wrap">
-        <input type="range" id="q${i}" min="0" max="${e.maxQty}" value="${e.qty}" step="1"
-          oninput="onSlider(${i})" onchange="onSliderCommit(${i})">
+        <div class="custom-slider" id="cs${i}" data-idx="${i}">
+          <div class="cs-track">
+            <div class="cs-fill" id="csf${i}"></div>
+            <div class="cs-thumb" id="cst${i}"></div>
+          </div>
+        </div>
         <div class="slider-labels"><span>0주</span><span>${fmt(e.maxQty/2)}주</span><span>${fmt(e.maxQty)}주</span></div>
       </div>
     `;
     el.appendChild(d);
     document.getElementById('pf'+i).onclick = () => editPrice(i);
     document.getElementById('qd'+i).onclick  = () => editQty(i);
+    initCustomSlider(i, e.qty, e.maxQty);
   });
 }
 
+// ─── 커스텀 슬라이더 ─────────────────────────────────────
+function initCustomSlider(i, initVal, maxVal) {
+  const wrap  = document.getElementById('cs'+i);
+  const fill  = document.getElementById('csf'+i);
+  const thumb = document.getElementById('cst'+i);
+  if (!wrap) return;
+
+  let dragging = false, startX = 0, currentVal = initVal;
+  let lastX = 0, lastT = 0, velocity = 0;
+  const DEAD = 8;  // 픽셀 데드존
+
+  function pct(v) { return Math.min(100, Math.max(0, v / maxVal * 100)); }
+
+  // 속도 기반 동적 step: 느리면 1, 빠를수록 최대 maxVal/20 까지
+  function dynamicStep(vx) {
+    const absV = Math.abs(vx);          // px/ms
+    if (absV < 0.3)  return 1;
+    if (absV < 0.8)  return Math.max(1, Math.round(maxVal / 100));
+    if (absV < 2.0)  return Math.max(1, Math.round(maxVal / 50));
+    if (absV < 5.0)  return Math.max(1, Math.round(maxVal / 20));
+    return Math.max(1, Math.round(maxVal / 10));
+  }
+
+  function setVal(v, redraw = true) {
+    v = Math.max(0, Math.min(maxVal, Math.round(v)));
+    currentVal = v;
+    if (redraw) {
+      fill.style.width  = pct(v) + '%';
+      thumb.style.left  = pct(v) + '%';
+      const qd = document.getElementById('qd'+i);
+      const qi = document.getElementById('qi'+i);
+      if (qd) qd.textContent = v;
+      if (qi) qi.value = v;
+      derive();
+    }
+  }
+
+  function getValFromX(clientX) {
+    const rect = wrap.querySelector('.cs-track').getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    return ratio * maxVal;
+  }
+
+  function updateVelocity(clientX) {
+    const now = Date.now();
+    const dt  = now - lastT;
+    if (dt > 0 && dt < 100) {
+      velocity = (clientX - lastX) / dt;  // px/ms
+    }
+    lastX = clientX;
+    lastT = now;
+  }
+
+  function applyDrag(clientX) {
+    updateVelocity(clientX);
+    const step = dynamicStep(velocity);
+    // 트랙 기준 목표값 계산 후 step 반올림
+    const rawVal = getValFromX(clientX);
+    const snapped = Math.round(rawVal / step) * step;
+    setVal(snapped);
+  }
+
+  // 초기 렌더
+  setVal(initVal, true);
+
+  // 마우스
+  wrap.addEventListener('mousedown', e => {
+    startX = e.clientX; lastX = e.clientX; lastT = Date.now();
+    velocity = 0; dragging = false;
+    const move = ev => {
+      if (!dragging && Math.abs(ev.clientX - startX) < DEAD) return;
+      dragging = true;
+      applyDrag(ev.clientX);
+    };
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      if (dragging) commitSlider(i, currentVal);
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
+
+  // 터치
+  wrap.addEventListener('touchstart', e => {
+    startX = e.touches[0].clientX;
+    lastX  = startX; lastT = Date.now();
+    velocity = 0; dragging = false;
+  }, {passive: true});
+
+  wrap.addEventListener('touchmove', e => {
+    const dx = e.touches[0].clientX - startX;
+    if (!dragging && Math.abs(dx) < DEAD) return;
+    dragging = true;
+    e.preventDefault();
+    applyDrag(e.touches[0].clientX);
+  }, {passive: false});
+
+  wrap.addEventListener('touchend', () => {
+    if (dragging) commitSlider(i, currentVal);
+  });
+}
+
+function commitSlider(i, v) {
+  if (v !== getActive().etfs[i].qty) snapshotForUndo();
+  getActive().etfs[i].qty = v;
+  saveState();
+}
+
+function onSlider(i) {
+  // 레거시 — 커스텀 슬라이더로 대체됨
+}
+function onSliderCommit(i) {
+  // 레거시
+}
 function editQty(i) {
   const disp = document.getElementById('qd'+i);
   const inp  = document.getElementById('qi'+i);
-  const sl   = document.getElementById('q'+i);
   disp.style.display = 'none';
   inp.style.display = 'inline-block';
   inp.focus(); inp.select();
@@ -947,15 +1069,22 @@ function editQty(i) {
     const v = parseInt(inp.value) || 0;
     const e = getActive().etfs[i];
     if (v !== e.qty) snapshotForUndo();
-    if (v > e.maxQty) { e.maxQty = Math.ceil(v * 1.5); sl.max = e.maxQty; }
+    if (v > e.maxQty) {
+      e.maxQty = Math.ceil(v * 1.5);
+      initCustomSlider(i, v, e.maxQty);
+    }
     e.qty = v;
-    sl.value = v;
+    const fill  = document.getElementById('csf'+i);
+    const thumb = document.getElementById('cst'+i);
+    const pct   = Math.min(100, v / e.maxQty * 100);
+    if (fill)  fill.style.width = pct + '%';
+    if (thumb) thumb.style.left = pct + '%';
     disp.textContent = v;
     disp.style.display = '';
     inp.style.display = 'none';
     derive(); saveState();
   };
-  inp.onblur  = commit;
+  inp.onblur    = commit;
   inp.onkeydown = ev => { if (ev.key === 'Enter') inp.blur(); };
 }
 
