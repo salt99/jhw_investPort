@@ -962,11 +962,11 @@ function initCustomSlider(i, initVal, maxVal) {
 
   function dynamicStep(vx) {
     const m = getMax(), absV = Math.abs(vx);
-    if (absV < 0.3)  return 1;
-    if (absV < 0.8)  return Math.max(1, Math.round(m / 100));
-    if (absV < 2.0)  return Math.max(1, Math.round(m / 50));
-    if (absV < 5.0)  return Math.max(1, Math.round(m / 20));
-    return Math.max(1, Math.round(m / 10));
+    if (absV < 0.5)  return 1;
+    if (absV < 1.5)  return Math.max(1, Math.round(m / 200));
+    if (absV < 3.0)  return Math.max(1, Math.round(m / 100));
+    if (absV < 6.0)  return Math.max(1, Math.round(m / 50));
+    return Math.max(1, Math.round(m / 25));
   }
 
   function setVal(v, redraw = true) {
