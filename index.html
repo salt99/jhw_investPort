@@ -387,7 +387,7 @@ function restoreResult(idx) {
   // 화면 전체 재빌드 (입력 폼 포함)
   lastItems = snap.items;
   lastGrand = snap.grand;
-  renderApp();
+  renderApp();  // buildEtfs → initCustomSlider 포함하여 완전 재빌드
 
   // 결과 섹션 표시
   const rs = document.getElementById('result-section');
@@ -994,10 +994,12 @@ function initCustomSlider(i, initVal, maxVal) {
 
   function expandMax() {
     const cur = getMax();
-    // 현재값의 10% 씩 점진적으로 확장 (최소 5 단위)
     const increment = Math.max(5, Math.round(cur * 0.1));
     getActive().etfs[i].maxQty = cur + increment;
     updateLabels();
+    // fill/thumb 위치 즉시 재계산
+    fill.style.width = pct(currentVal) + '%';
+    thumb.style.left = pct(currentVal) + '%';
   }
 
   function getRatio(clientX) {
@@ -1317,26 +1319,23 @@ function applyComplete() {
 
   // 리밸런싱 완료로 자동 저장
   saveResult('complete');
-
   saveState();
 
   // 완료 후 결과 초기화
   lastItems = null; lastGrand = 0;
 
-  // 입력 UI 재빌드
-  buildEtfs();
-  derive();
-
   // 완료 확인 숨김
   const box = document.getElementById('complete-confirm');
   if (box) box.style.display = 'none';
-  document.getElementById('result-section').style.display = 'none';
+
+  // 전체 재빌드 (슬라이더 maxQty 포함 재초기화)
+  renderApp();
 
   // 토스트
   showCompleteToast();
 
   // 상단으로 스크롤
-  document.getElementById('app').scrollIntoView({behavior:'smooth', block:'start'});
+  document.getElementById('app')?.scrollIntoView({behavior:'smooth', block:'start'});
 }
 
 function showCompleteToast() {
