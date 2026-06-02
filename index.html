@@ -1071,41 +1071,76 @@ function onSliderCommit(i) {
   // 레거시
 }
 function editQty(i) {
-  const disp = document.getElementById('qd'+i);
-  const inp  = document.getElementById('qi'+i);
-  disp.style.display = 'none';
-  inp.style.display = 'inline-block';
-  inp.focus(); inp.select();
-  let done = false;
-  const commit = () => {
-    if (done) return;
-    done = true;
-    const v = parseInt(inp.value) || 0;
-    const e = getActive().etfs[i];
+  const e = getActive().etfs[i];
+  const box = document.createElement('div');
+  box.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;display:flex;align-items:center;justify-content:center;padding:1rem';
+  box.innerHTML = `
+    <div style="background:#fff;border-radius:14px;padding:22px;width:100%;max-width:280px">
+      <div style="font-size:13px;color:#aaa;margin-bottom:4px">${e.name}</div>
+      <div style="font-size:14px;font-weight:500;margin-bottom:14px">보유수량 입력</div>
+      <input id="qty-modal-input" type="number" inputmode="numeric" value="${e.qty}"
+        style="width:100%;padding:12px;border:1.5px solid #1a1a1a;border-radius:10px;font-size:20px;font-weight:500;text-align:center;outline:none;background:#f7f7f5;-moz-appearance:textfield">
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button id="qty-modal-cancel" style="flex:1;padding:11px;border-radius:8px;border:1px solid #ddd;background:#f7f7f5;color:#666;font-size:14px;cursor:pointer">취소</button>
+        <button id="qty-modal-ok" style="flex:1;padding:11px;border-radius:8px;border:none;background:#1a1a1a;color:#fff;font-size:14px;font-weight:500;cursor:pointer">확인</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(box);
+  const input = document.getElementById('qty-modal-input');
+  input.focus(); input.select();
+
+  const close = () => box.remove();
+  const apply = () => {
+    const v = parseInt(input.value) || 0;
     if (v !== e.qty) snapshotForUndo();
     e.qty = v;
-    // 입력값 기준 min/max 항상 재설정 (수량의 2배, 최소 50)
     e.maxQty = Math.max(50, Math.ceil(v * 2));
     saveState();
-    // 입력 폼 전체를 다시 그려서 슬라이더·라벨·이벤트를 깨끗하게 재생성
     buildEtfs();
     derive();
+    close();
   };
-  inp.onblur    = commit;
-  inp.onkeydown = ev => { if (ev.key === 'Enter') { ev.preventDefault(); inp.blur(); } };
+  document.getElementById('qty-modal-cancel').onclick = close;
+  document.getElementById('qty-modal-ok').onclick = apply;
+  input.onkeydown = ev => { if (ev.key === 'Enter') { ev.preventDefault(); apply(); } };
+  box.onclick = ev => { if (ev.target === box) close(); };
 }
 
 function editPrice(i) {
-  const disp = document.getElementById('pf'+i), inp = document.getElementById('p'+i);
-  disp.style.display = 'none'; inp.style.display = 'inline-block'; inp.focus();
-  inp.onblur = () => {
-    const v = parseFloat(inp.value) || 0;
-    if (v !== getActive().etfs[i].price) snapshotForUndo();
-    getActive().etfs[i].price = v;
-    disp.textContent = fmt(v)+' 원';
-    disp.style.display = ''; inp.style.display = 'none';
-    derive(); saveState();
+  const e = getActive().etfs[i];
+  const box = document.createElement('div');
+  box.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;display:flex;align-items:center;justify-content:center;padding:1rem';
+  box.innerHTML = `
+    <div style="background:#fff;border-radius:14px;padding:22px;width:100%;max-width:280px">
+      <div style="font-size:13px;color:#aaa;margin-bottom:4px">${e.name}</div>
+      <div style="font-size:14px;font-weight:500;margin-bottom:14px">현재가 입력 (원)</div>
+      <input id="price-modal-input" type="number" inputmode="numeric" value="${e.price}"
+        style="width:100%;padding:12px;border:1.5px solid #1D9E75;border-radius:10px;font-size:20px;font-weight:500;text-align:center;outline:none;background:#f7f7f5;color:#1D9E75;-moz-appearance:textfield">
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button id="price-modal-cancel" style="flex:1;padding:11px;border-radius:8px;border:1px solid #ddd;background:#f7f7f5;color:#666;font-size:14px;cursor:pointer">취소</button>
+        <button id="price-modal-ok" style="flex:1;padding:11px;border-radius:8px;border:none;background:#1D9E75;color:#fff;font-size:14px;font-weight:500;cursor:pointer">확인</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(box);
+  const input = document.getElementById('price-modal-input');
+  input.focus(); input.select();
+
+  const close = () => box.remove();
+  const apply = () => {
+    const v = parseFloat(input.value) || 0;
+    if (v !== e.price) snapshotForUndo();
+    e.price = v;
+    saveState();
+    buildEtfs();
+    derive();
+    close();
   };
+  document.getElementById('price-modal-cancel').onclick = close;
+  document.getElementById('price-modal-ok').onclick = apply;
+  input.onkeydown = ev => { if (ev.key === 'Enter') { ev.preventDefault(); apply(); } };
+  box.onclick = ev => { if (ev.target === box) close(); };
 }
 function onSlider(i) {
   const v = parseInt(document.getElementById('q'+i).value);
