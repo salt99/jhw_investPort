@@ -1024,42 +1024,31 @@ function initCustomSlider(i, initVal, maxVal) {
   // 초기 렌더
   setVal(initVal, true);
 
-  // 마우스
-  wrap.addEventListener('mousedown', e => {
+  // ── Pointer Events (PC·iOS·Android 통합) ─────────────────
+  wrap.style.touchAction = 'none';  // iOS Safari 스크롤 간섭 차단
+
+  wrap.addEventListener('pointerdown', e => {
+    wrap.setPointerCapture(e.pointerId);
     startX = e.clientX; lastX = e.clientX; lastT = Date.now();
     velocity = 0; dragging = false;
-    const move = ev => {
-      if (!dragging && Math.abs(ev.clientX - startX) < DEAD) return;
-      dragging = true;
-      applyDrag(ev.clientX);
-    };
-    const up = () => {
-      document.removeEventListener('mousemove', move);
-      document.removeEventListener('mouseup', up);
-      if (dragging) commitSlider(i, currentVal);
-    };
-    document.addEventListener('mousemove', move);
-    document.addEventListener('mouseup', up);
+    e.preventDefault();
   });
 
-  // 터치
-  wrap.addEventListener('touchstart', e => {
-    startX = e.touches[0].clientX;
-    lastX  = startX; lastT = Date.now();
-    velocity = 0; dragging = false;
-  }, {passive: true});
-
-  wrap.addEventListener('touchmove', e => {
-    const dx = e.touches[0].clientX - startX;
+  wrap.addEventListener('pointermove', e => {
+    if (!e.buttons && e.pointerType === 'mouse') return;
+    const dx = e.clientX - startX;
     if (!dragging && Math.abs(dx) < DEAD) return;
     dragging = true;
+    applyDrag(e.clientX);
     e.preventDefault();
-    applyDrag(e.touches[0].clientX);
-  }, {passive: false});
-
-  wrap.addEventListener('touchend', () => {
-    if (dragging) commitSlider(i, currentVal);
   });
+
+  wrap.addEventListener('pointerup', e => {
+    if (dragging) commitSlider(i, currentVal);
+    dragging = false;
+  });
+
+  wrap.addEventListener('pointercancel', () => { dragging = false; });
 }
 
 function commitSlider(i, v) {
