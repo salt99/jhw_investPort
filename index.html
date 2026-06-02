@@ -1080,16 +1080,17 @@ function editQty(i) {
     const v = parseInt(inp.value) || 0;
     const e = getActive().etfs[i];
     if (v !== e.qty) snapshotForUndo();
-    if (v > e.maxQty) {
-      e.maxQty = Math.ceil(v * 1.5);
-      initCustomSlider(i, v, e.maxQty);
-    }
     e.qty = v;
-    const fill  = document.getElementById('csf'+i);
-    const thumb = document.getElementById('cst'+i);
-    const pct   = Math.min(100, v / e.maxQty * 100);
-    if (fill)  fill.style.width = pct + '%';
-    if (thumb) thumb.style.left = pct + '%';
+    // 입력값 기준으로 min/max 항상 재설정 (수량의 2배, 최소 50)
+    e.maxQty = Math.max(50, Math.ceil(v * 2));
+    // 슬라이더 완전 재초기화
+    initCustomSlider(i, v, e.maxQty);
+    // 라벨 업데이트
+    const labels = document.getElementById('cs'+i)?.parentElement.querySelectorAll('.slider-labels span');
+    if (labels && labels.length === 3) {
+      labels[1].textContent = fmt(Math.round(e.maxQty / 2)) + '주';
+      labels[2].textContent = fmt(e.maxQty) + '주';
+    }
     disp.textContent = v;
     disp.style.display = '';
     inp.style.display = 'none';
