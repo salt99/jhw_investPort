@@ -1076,28 +1076,23 @@ function editQty(i) {
   disp.style.display = 'none';
   inp.style.display = 'inline-block';
   inp.focus(); inp.select();
+  let done = false;
   const commit = () => {
+    if (done) return;
+    done = true;
     const v = parseInt(inp.value) || 0;
     const e = getActive().etfs[i];
     if (v !== e.qty) snapshotForUndo();
     e.qty = v;
-    // 입력값 기준으로 min/max 항상 재설정 (수량의 2배, 최소 50)
+    // 입력값 기준 min/max 항상 재설정 (수량의 2배, 최소 50)
     e.maxQty = Math.max(50, Math.ceil(v * 2));
-    // 슬라이더 완전 재초기화
-    initCustomSlider(i, v, e.maxQty);
-    // 라벨 업데이트
-    const labels = document.getElementById('cs'+i)?.parentElement.querySelectorAll('.slider-labels span');
-    if (labels && labels.length === 3) {
-      labels[1].textContent = fmt(Math.round(e.maxQty / 2)) + '주';
-      labels[2].textContent = fmt(e.maxQty) + '주';
-    }
-    disp.textContent = v;
-    disp.style.display = '';
-    inp.style.display = 'none';
-    derive(); saveState();
+    saveState();
+    // 입력 폼 전체를 다시 그려서 슬라이더·라벨·이벤트를 깨끗하게 재생성
+    buildEtfs();
+    derive();
   };
   inp.onblur    = commit;
-  inp.onkeydown = ev => { if (ev.key === 'Enter') inp.blur(); };
+  inp.onkeydown = ev => { if (ev.key === 'Enter') { ev.preventDefault(); inp.blur(); } };
 }
 
 function editPrice(i) {
