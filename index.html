@@ -993,8 +993,10 @@ function initCustomSlider(i, initVal, maxVal) {
   }
 
   function expandMax() {
-    const newMax = Math.ceil(getMax() * 1.5);
-    getActive().etfs[i].maxQty = newMax;
+    const cur = getMax();
+    // 현재값의 10% 씩 점진적으로 확장 (최소 5 단위)
+    const increment = Math.max(5, Math.round(cur * 0.1));
+    getActive().etfs[i].maxQty = cur + increment;
     updateLabels();
   }
 
