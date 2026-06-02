@@ -367,15 +367,18 @@ function restoreResult(idx) {
     const etfIdx = p.etfs.findIndex(e => e.name === snapItem.name);
     if (etfIdx === -1) return;
 
-    // 저장 시점의 수량(리밸런싱 후 = q + delta) 반영
-    const restoredQty = snapItem.q + snapItem.delta;
+    // complete(리밸런싱 완료) 스냅샷 → 거래 후 수량(q+delta)
+    // guide(매수/매도 가이드) 스냅샷 → 거래 전 수량(q) 그대로
+    const restoredQty = (snap.type === 'complete')
+      ? snapItem.q + snapItem.delta
+      : snapItem.q;
+
     p.etfs[etfIdx].qty   = restoredQty;
     p.etfs[etfIdx].price = snapItem.pr;
 
-    // maxQty를 복원 수량 기준으로 재계산 (수량의 2배, 최소 기본값 유지)
-    const defaultMax = DEFAULT_PORTFOLIOS().find(dp => dp.id === p.id)
-      ?.etfs[etfIdx]?.maxQty || 200;
-    p.etfs[etfIdx].maxQty = Math.max(defaultMax, Math.ceil(restoredQty * 2));
+    // min/max를 보유수량에 맞게 적정하게 재설정
+    // 수량이 0이면 최소 50, 아니면 수량의 2배 (최소 50)
+    p.etfs[etfIdx].maxQty = Math.max(50, Math.ceil(restoredQty * 2));
   });
 
   // 총 평가액 반영
