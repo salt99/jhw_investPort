@@ -372,10 +372,10 @@ function restoreResult(idx) {
     p.etfs[etfIdx].qty   = restoredQty;
     p.etfs[etfIdx].price = snapItem.pr;
 
-    // 슬라이더 최대값도 넉넉하게 조정
-    if (restoredQty > p.etfs[etfIdx].maxQty * 0.8) {
-      p.etfs[etfIdx].maxQty = Math.ceil(restoredQty * 2);
-    }
+    // maxQty를 복원 수량 기준으로 재계산 (수량의 2배, 최소 기본값 유지)
+    const defaultMax = DEFAULT_PORTFOLIOS().find(dp => dp.id === p.id)
+      ?.etfs[etfIdx]?.maxQty || 200;
+    p.etfs[etfIdx].maxQty = Math.max(defaultMax, Math.ceil(restoredQty * 2));
   });
 
   // 총 평가액 반영
@@ -1308,8 +1308,10 @@ function applyComplete() {
   lastItems.forEach(r => {
     const etf = p.etfs.find(e => e.name === r.name);
     if (etf) {
-      etf.qty = r.q + r.delta;
-      etf.maxQty = Math.max(etf.maxQty, etf.qty * 2);
+      const newQty = r.q + r.delta;
+      etf.qty = newQty;
+      // maxQty를 새 수량 기준으로 재설정 (수량의 2배, 최소 기본값)
+      etf.maxQty = Math.max(50, Math.ceil(newQty * 2));
     }
   });
 
