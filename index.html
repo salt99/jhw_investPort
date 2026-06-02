@@ -1000,8 +1000,23 @@ function initCustomSlider(i, initVal, maxVal) {
   function applyDrag(clientX) {
     updateVelocity(clientX);
     const step = dynamicStep(velocity);
-    // 트랙 기준 목표값 계산 후 step 반올림
-    const rawVal = getValFromX(clientX);
+    const rect = wrap.querySelector('.cs-track').getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+
+    // 트랙 끝(95% 이상)에서 드래그 중이면 maxQty 자동 확장
+    if (ratio >= 0.95 && velocity > 0.2) {
+      const newMax = Math.ceil(maxVal * 1.5);
+      maxVal = newMax;
+      getActive().etfs[i].maxQty = newMax;
+      // 라벨 업데이트
+      const labels = wrap.parentElement.querySelectorAll('.slider-labels span');
+      if (labels.length === 3) {
+        labels[1].textContent = fmt(Math.round(newMax / 2)) + '주';
+        labels[2].textContent = fmt(newMax) + '주';
+      }
+    }
+
+    const rawVal = ratio * maxVal;
     const snapped = Math.round(rawVal / step) * step;
     setVal(snapped);
   }
