@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>리밸런싱 계산기</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -1429,8 +1432,15 @@ async function showLastUpdated() {
     }
   } catch(e) {}
   if (el) {
-    el.innerHTML = (priceInfo ? `<div>${priceInfo}</div>` : '') + `<div>SW 업데이트: ${SW_VERSION}</div>`;
+    el.innerHTML = (priceInfo ? `<div>${priceInfo}</div>` : '')
+      + `<div>SW 업데이트: ${SW_VERSION} <span onclick="forceReload()" style="color:#1D9E75;cursor:pointer;text-decoration:underline;margin-left:4px">새로고침</span></div>`;
   }
+}
+
+function forceReload() {
+  // 캐시 무시하고 강제 새로고침
+  const url = location.href.split('?')[0] + '?v=' + Date.now();
+  location.replace(url);
 }
 
 init();
