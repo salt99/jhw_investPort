@@ -364,21 +364,15 @@ function restoreResult(idx) {
   const p = getActive();
 
   // ── 입력 폼에 현재가·수량 반영 ──────────────────────────
+  // guide/complete 모두 "리밸런싱 후 목표수량(q+delta)"으로 복원
+  // → 불러온 뒤 종가만 갱신해 재계산하면 현 보유 기준으로 동작
   snap.items.forEach(snapItem => {
     const etfIdx = p.etfs.findIndex(e => e.name === snapItem.name);
     if (etfIdx === -1) return;
 
-    // complete(리밸런싱 완료) 스냅샷 → 거래 후 수량(q+delta)
-    // guide(매수/매도 가이드) 스냅샷 → 거래 전 수량(q) 그대로
-    const restoredQty = (snap.type === 'complete')
-      ? snapItem.q + snapItem.delta
-      : snapItem.q;
-
+    const restoredQty = snapItem.q + snapItem.delta;  // 목표 보유수량
     p.etfs[etfIdx].qty   = restoredQty;
     p.etfs[etfIdx].price = snapItem.pr;
-
-    // min/max를 보유수량에 맞게 적정하게 재설정
-    // 수량이 0이면 최소 50, 아니면 수량의 2배 (최소 50)
     p.etfs[etfIdx].maxQty = Math.max(50, Math.ceil(restoredQty * 2));
   });
 
@@ -389,16 +383,13 @@ function restoreResult(idx) {
   saveState();
 
   // 화면 전체 재빌드 (입력 폼 포함)
-  lastItems = snap.items;
-  lastGrand = snap.grand;
-  renderApp();  // buildEtfs → initCustomSlider 포함하여 완전 재빌드
+  renderApp();
 
-  // 결과 섹션 표시
-  const rs = document.getElementById('result-section');
-  if (rs) {
-    rs.style.display = 'block';
-    renderCalcResult(snap.items, snap.grand);
-  }
+  // 복원된 보유수량·종가 기준으로 결과 재계산 (스냅샷 그대로 표시하지 않음)
+  lastItems = null; lastGrand = 0;
+  document.getElementById('grand').value = snap.grand;
+  getActive().grand = snap.grand;
+  derive();
 
   // 상단 입력 폼으로 스크롤
   document.getElementById('app')?.scrollIntoView({behavior:'smooth', block:'start'});
