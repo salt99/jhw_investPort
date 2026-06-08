@@ -133,7 +133,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </head>
 <body>
 <div class="wrap">
-<div id="last-updated" style="font-size:11px;color:#bbb;text-align:right;margin-bottom:6px">SW 업데이트: 2026.06.08 19:28</div>
+<div id="last-updated" style="font-size:11px;color:#bbb;text-align:right;margin-bottom:6px;line-height:1.5">SW 업데이트: 2026.06.08 19:28</div>
 <div class="tab-nav">
   <button class="tab-arrow" id="tab-left" onclick="tabScroll(-1)">&#8249;</button>
   <div class="tab-scroll" id="tab-scroll"></div>
@@ -1429,7 +1429,7 @@ async function showLastUpdated() {
     }
   } catch(e) {}
   if (el) {
-    el.innerHTML = (priceInfo ? priceInfo + ' &nbsp;·&nbsp; ' : '') + `SW 업데이트: ${SW_VERSION}`;
+    el.innerHTML = (priceInfo ? `<div>${priceInfo}</div>` : '') + `<div>SW 업데이트: ${SW_VERSION}</div>`;
   }
 }
 
