@@ -1142,21 +1142,8 @@ function editPrice(i) {
   input.onkeydown = ev => { if (ev.key === 'Enter') { ev.preventDefault(); apply(); } };
   box.onclick = ev => { if (ev.target === box) close(); };
 }
-function onSlider(i) {
-  const v = parseInt(document.getElementById('q'+i).value);
-  document.getElementById('qd'+i).textContent = v;
-  const qi = document.getElementById('qi'+i);
-  if (qi) qi.value = v;
-  derive();
-}
-function onSliderCommit(i) {
-  const v = parseInt(document.getElementById('q'+i).value) || 0;
-  if (v !== getActive().etfs[i].qty) snapshotForUndo();
-  getActive().etfs[i].qty = v;
-  const qi = document.getElementById('qi'+i);
-  if (qi) qi.value = v;
-  saveState();
-}
+function onSlider(i) {}        // 레거시 (커스텀 슬라이더로 대체)
+function onSliderCommit(i) {}  // 레거시
 function addEtf() {
   // 모달 폼으로 ETF 추가
   const box = document.createElement('div');
@@ -1209,8 +1196,8 @@ function addEtf() {
   };
 }
 
-function getQty(i)   { return parseInt(document.getElementById('q'+i)?.value) || 0; }
-function getPrice(i) { return parseFloat(document.getElementById('p'+i)?.value) || getActive().etfs[i].price; }
+function getQty(i)   { return getActive().etfs[i].qty || 0; }
+function getPrice(i) { return getActive().etfs[i].price || 0; }
 function autoTotal() { return getActive().etfs.reduce((s,_,i) => s + getPrice(i)*getQty(i), 0); }
 
 function derive() {
@@ -1219,7 +1206,8 @@ function derive() {
   if (cv && g > 0) {
     const p = getActive();
     const cost = p.etfs.reduce((s, e, i) => {
-      const pr = parseFloat(document.getElementById('p'+i)?.value) || e.price;
+      const pr = e.price || 0;
+      if (!pr) return s;
       return s + pr * parseInt(g * e.target / 100 / pr);
     }, 0);
     const cash = g - cost;
@@ -1405,14 +1393,10 @@ async function fetchPrices() {
     const p = getActive();
     let updated = 0, skipped = 0;
 
-    p.etfs.forEach((e, i) => {
+    p.etfs.forEach((e) => {
       const price = prices[e.code];
       if (price && price > 0) {
         e.price = price;
-        const pf = document.getElementById('pf'+i);
-        if (pf) pf.textContent = fmt(price) + ' 원';
-        const pi = document.getElementById('p'+i);
-        if (pi) pi.value = price;
         updated++;
       } else {
         skipped++;
@@ -1420,6 +1404,7 @@ async function fetchPrices() {
     });
 
     saveState();
+    buildEtfs();   // 가격 표시 갱신
     derive();
 
     if (bar) {
