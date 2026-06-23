@@ -367,13 +367,16 @@ function restoreResult(idx) {
   const p = getActive();
 
   // ── 입력 폼에 현재가·수량 반영 ──────────────────────────
-  // guide/complete 모두 "리밸런싱 후 목표수량(q+delta)"으로 복원
-  // → 불러온 뒤 종가만 갱신해 재계산하면 현 보유 기준으로 동작
+  // complete(리밸런싱 완료) → 거래 후 수량(q+delta) 복원
+  // guide(매수/매도 가이드, 아직 미실행) → 그 시점 보유수량(q) 그대로 복원
   snap.items.forEach(snapItem => {
     const etfIdx = p.etfs.findIndex(e => e.name === snapItem.name);
     if (etfIdx === -1) return;
 
-    const restoredQty = snapItem.q + snapItem.delta;  // 목표 보유수량
+    const restoredQty = (snap.type === 'complete')
+      ? snapItem.q + snapItem.delta
+      : snapItem.q;
+
     p.etfs[etfIdx].qty   = restoredQty;
     p.etfs[etfIdx].price = snapItem.pr;
     p.etfs[etfIdx].maxQty = Math.max(50, Math.ceil(restoredQty * 2));
