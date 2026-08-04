@@ -2,10 +2,13 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#f7f7f5">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="리밸런싱">
 <title>리밸런싱 계산기</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -307,7 +310,9 @@ function updateUndoButtons() {
 }
 
 function saveState() {
-  flushGrand();
+  // flushGrand() 제거: 프로그램이 grand를 바꾼 직후 saveState를 부르면
+  // 아직 재렌더 전인 #grand DOM의 '옛 값'이 방금 넣은 값을 덮어써 버림.
+  // 사용자가 입력한 값은 onGrandInput()에서 이미 실시간 반영되므로 불필요.
   LSS(SK, JSON.stringify({portfolios, nextId, activeId}));
   updateUndoButtons();
 }
@@ -388,13 +393,11 @@ function restoreResult(idx) {
   // 상태 저장
   saveState();
 
-  // 화면 전체 재빌드 (입력 폼 포함)
+  // 화면 전체 재빌드 (입력 폼 + grand-fmt 모두 p.grand 기준으로 새로 그려짐)
   renderApp();
 
   // 복원된 보유수량·종가 기준으로 결과 재계산 (스냅샷 그대로 표시하지 않음)
   lastItems = null; lastGrand = 0;
-  document.getElementById('grand').value = snap.grand;
-  getActive().grand = snap.grand;
   derive();
 
   // 상단 입력 폼으로 스크롤
@@ -886,11 +889,15 @@ function updateMeta() {
 }
 
 // ─── 입력 ────────────────────────────────────────────────
+let _grandSaveT = null;
 function onGrandInput() {
   const v = Number(document.getElementById('grand').value) || 0;
   getActive().grand = v;
   document.getElementById('grand-fmt').textContent = v > 0 ? fmt(v)+' 원' : '—';
   derive();
+  // iOS가 키보드 표시 중 웹뷰를 리로드해도 값이 남도록 즉시(디바운스) 저장
+  clearTimeout(_grandSaveT);
+  _grandSaveT = setTimeout(saveState, 400);
 }
 function onGrandBlur() {
   getActive().grand = Number(document.getElementById('grand').value) || 0;
